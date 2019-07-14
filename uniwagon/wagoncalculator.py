@@ -7,6 +7,12 @@ with open("data/wiki-recipes-0.17.52.json", "r") as recipe_file:
 with open("data/wiki-items-0.17.52.json", "r") as item_file:
     items = json.load(item_file)
 
+class Component:
+     def __init__(self, product, amount):
+         self.product = product
+         self.amount = amount
+
+
 class Product:
     def __init__(self, name):
         self.name = name
@@ -18,9 +24,11 @@ class Product:
         print("Recipe for: %s" % self.name)
         print("Stack size: %s" % self.stack)
         for _component in self.components:
-            print("Material:   %s" % _component[0].name)
-            print("Amount:     %s" % _component[1])
-            print("Stack size: %s" % _component[0].stack)
+            print("Material:   %s" % _component.product.name)
+            print("Amount:     %s" % _component.amount)
+            print("Stack size: %s" % _component.product.stack)
+
+
 
 
 def create_product(product_name, product_dict):
@@ -57,13 +65,12 @@ def create_product(product_name, product_dict):
     _product.stack = _stack
     product_dict[product_name] = _product
 
-    # Create products for each component.
+    # Create Products for each component.
     for _component in _components[1:]:
-        _name = _component[0]
-        _amount = _component[1]
-        _new_product = create_product(_name, product_dict)
+        _new_product = create_product(_component[0], product_dict)
         if _new_product is not None:
-            _product.components.append([_new_product, _amount])
+            _new_component = Component(_new_product, _component[1])
+            _product.components.append(_new_component)
 
     return _product
     
@@ -73,7 +80,7 @@ def main(as_module=False):
         print("Error: No recipe name provided")
         return
 
-    # Create product recipe structure from name argument.
+    # Create rooted product graph
     _product_name = str(sys.argv[1])
     _product_dict = {}
     _product = create_product(_product_name, _product_dict)
@@ -83,6 +90,8 @@ def main(as_module=False):
 
     print("Recipe created for: ", _product.name)
     _product.print_components()
+
+
 
 if __name__ == "__main__":
     main(as_module=True)
