@@ -7,10 +7,30 @@ with open("data/wiki-recipes-0.17.52.json", "r") as recipe_file:
 with open("data/wiki-items-0.17.52.json", "r") as item_file:
     items = json.load(item_file)
 
+
+mod_per_asm = 4
+mod_per_bcn = 2
+prd_mod_prd = 0.10 
+prd_mod_spd = -0.15
+spd_mod_spd = 0.50
+bcn_eff     = 0.50
+asm_spd     = 1.25
+asm_prd     = 1
+bcn_spd     = mod_per_bcn * spd_mod_spd * bcn_eff
+
+
+class Station:
+    def __init__(self, asms = 1, bcn_per_asm = 8):
+        self.asms = asms
+        self.bcn_per_asm = bcn_per_asm
+        self.crafting_speed = asms * (asm_spd * (1 + (bcn_spd * bcn_per_asm) + (prd_mod_spd * mod_per_asm)))
+        self.productivity = asms * (asm_prd * (1 + (prd_mod_prd * mod_per_asm)))
+
+
 class Component:
-     def __init__(self, product, amount):
-         self.product = product
-         self.amount = amount
+    def __init__(self, product, amount):
+        self.product = product
+        self.amount = amount
 
 
 class Product:
@@ -90,7 +110,9 @@ def main(as_module=False):
 
     print("Recipe created for: ", _product.name)
     _product.print_components()
-
+    _station = Station()
+    print("Station crafting speed: ", _station.crafting_speed)
+    print("Station productivity: ", _station.productivity)
 
 
 if __name__ == "__main__":
