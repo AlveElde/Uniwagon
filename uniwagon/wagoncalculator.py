@@ -1,6 +1,6 @@
-import sys
-import json
 import copy
+import json
+import sys
 
 with open("data/wiki-recipes-0.17.52.json", "r") as recipe_file:
     recipes = json.load(recipe_file)
@@ -22,9 +22,26 @@ ASM_SPD     = 1.25
 ASM_PRD     = 1
 BCN_SPD     = MOD_PER_BCN * SPD_MOD_SPD * BCN_EFF
 
+
+
 class Train:
-    def __init__(self):
-        pass
+    def __init__(self, product):
+        self.wagons = []
+        self.wagon_tree = self.create_wagon_tree(product)
+        if self.wagon_tree is None:
+            print("Error: Failed to create wagon tree")
+
+
+    def create_wagon_tree(self, product):
+        _wagon = Wagon(product, Station())
+        self.wagons.append(_wagon)
+        for _component in product.components:
+            _wagon.suppliers[product.name] = self.create_wagon_tree(_component.product)
+        return _wagon
+
+    def print(self):
+        for _wagon in self.wagons:
+            print(_wagon.name)
 
 
 
@@ -33,9 +50,7 @@ class Wagon:
         self.name = product.name
         self.product = product
         self.station = station
-        self.output_stacks = []
-        self.prev = Wagon()
-        self.next = Wagon()
+        self.output_stacks = [Stack()] * STACK_CAPACITY
         self.suppliers = {}
        
 
@@ -73,7 +88,7 @@ class Wagon:
 
         # Not enough room in the wagon.
         if _output_left > 0:
-            print("Not enough room")#TODO: Provide better feedback
+            print("Warning: Not enough room")#TODO: Provide better feedback
             self.unreserve_all()
             return False
 
@@ -191,7 +206,8 @@ class Product:
         print("---------------------------")
 
 
-def create_miniimal_train():
+def create_minimal_train(product):
+
     pass
 
 
@@ -203,7 +219,7 @@ def print_recipe_breakdown(product):
         pass
 
 
-def create_product(product_name, product_dict):
+def create_product_graph(product_name, product_dict):
     # Check if the product has already been created.
     _product = product_dict.get(product_name)
     if _product is not None:
@@ -239,11 +255,10 @@ def create_product(product_name, product_dict):
 
     # Create Products for each component.
     for _component in _components[1:]:
-        _new_product = create_product(_component[0], product_dict)
+        _new_product = create_product_graph(_component[0], product_dict)
         if _new_product is not None:
             _new_component = Component(_new_product, _component[1])
             _product.components.append(_new_component)
-
     return _product
     
 
@@ -255,7 +270,7 @@ def main(as_module=False):
     # Create rooted product graph
     _product_name = str(sys.argv[1]) #TODO: Concatenate 1 - n args
     _product_dict = {}
-    _product = create_product(_product_name, _product_dict)
+    _product = create_product_graph(_product_name, _product_dict)
     if _product is None :
         print("Argument error: No recipe entry found for: ", _product_name)
         return
@@ -265,6 +280,8 @@ def main(as_module=False):
     _station = Station()
     _station.print()
 
+    _test_train = Train(_product)
+    _test_train.print()
 
 if __name__ == "__main__":
     main(as_module=True)
