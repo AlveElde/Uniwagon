@@ -27,64 +27,71 @@ class Train:
         pass
 
 
+
 class Wagon:
-    def __init__(self, product):
+    def __init__(self, product, station):
+        self.name = product.name
         self.product = product
-        self.input = []
-        self.output = []
+        self.station = station
+        self.output_stacks = []
         self.prev = Wagon()
         self.next = Wagon()
         self.suppliers = {}
+       
+
+    def unreserve_all(self):
+        for _stack in self.output_stacks:
+                _stack.unreserve()
+
+
+    def increase_all(self):
+        for _stack in self.output_stacks:
+                _stack.increase()
         
-    #TODO: Implement productivity
-    def increase_output(self, amount, station):
-        _output_stacks = []
-        _left = amount 
+        
+    def increase_output(self, amount):
+        # Find smallest amount of production cycles that will produce at least amount
+        _production_cycles = amount
+        while (_production_cycles-1) * self.station.productivity >= amount:
+            _production_cycles -= 1
+        _output_left = _production_cycles * self.station.productivity
 
-        # Check output can be increased by amount
-        for _stack in self.output:
-            if _stack.product.name != self.product.name:
+        # Reserve any non-empty stack of the same item
+        for _stack in self.output_stacks:
+            if _stack.empty:
                 continue
+            _reserved = _stack.reserve(self.product, _output_left)
+            if _reserved > 0:
+                _output_left -= _reserved
+                break
 
-            # The stack can fit some of the amount outstanding.
-            if _stack.count + _left > self.product.stack_size:
-                 _left = _stack.count + _left - self.product.stack_size
-                 _output_stacks.append(_stack)
-                 continue
-            
-            # The stack can fit the entire amount outstanding.
-            if _left > 0:
-                _left = 0
-                _output_stacks.append(_stack)
-            break
+        # Reserve empty stack(s) for the remaining amount
+        for _stack in self.output_stacks:
+            if not _stack.empty:
+                continue
+            _output_left -= _stack.reserve(self.product, _output_left)
 
-        # Not enough output room in the wagon.
-        if _left > 0:
+        # Not enough room in the wagon.
+        if _output_left > 0:
+            print("Not enough room")#TODO: Provide better feedback
+            self.unreserve_all()
             return False
 
-        # Recursively check if prev wagons can increase output.
+        # Recursively check if supplier wagons can increase output.
         for _component in self.product.components:
             _supplier = suppliers.get(_component.name)
             if _supplier == None:
                 print("Error: Wagon supplier not found")
+                self.unreserve_all()
                 return False
             
-            _output_increase = _component.amount * amount
+            _output_increase = _component.amount * _production_cycles
             if not _supplier.increase_output(_output_increase):
+                self.unreserve_all()
                 return False
             
         #Increase output
-        for _stack in _output_stacks:
-            # Some of the amount is put on the stack, filling it up.
-            if _stack.count + _left > self.product.stack_size:
-                _left = _stack.count + _left - self.product.stack_size
-                _stack.count = self.product.stack_size
-                continue
-            
-            # The rest of the amount is put on the 
-            if _left > 0:
-                _stack.count += _left
-            break
+        self.increase_all()
         return True
 
         
@@ -94,11 +101,9 @@ class Station:
         self.asm = asm
         self.bcn_per_asm = bcn_per_asm
         self.crafting_speed = asm * (ASM_SPD * (1 + (BCN_SPD * bcn_per_asm) + (PRD_MOD_SPD * MOD_PER_ASM)))
-        self.productivity = asm * (ASM_PRD * (1 + (PRD_MOD_PRD * MOD_PER_ASM)))
+        self.productivity = ASM_PRD * (1 + (PRD_MOD_PRD * MOD_PER_ASM))
         #TODO: Calculate efficiency
 
-    def funcname(self, parameter_list):
-        pass
 
     def print(self):
         print("---------------------------")
@@ -108,9 +113,50 @@ class Station:
 
 
 class Stack:
-    def __init__(self, product):
-        self.product = product
+    def __init__(self):
+        self.name = "Empty"
+        self.product = None
         self.count = 0
+        self.count_reserved = 0
+        self.empty = True
+
+
+    def reserve(self, product, amount):
+        if not self.empty:
+            if self.count == self.product.stack_size:
+                return 0
+            if product.name != self.name:
+                return 0
+
+        if self.empty:
+            self.name = product.name
+            self.product = product
+            self.empty = False
+        
+        # The stack can fit the entire amount.
+        if self.count + amount < product.stack_size:
+            self.count += amount
+            self.count_reserved += amount
+            return amount
+        
+        # The stack can fit the some of the amount.
+        _reserved = self.product.stack_size - self.count
+        self.count = self.product.stack_size
+        self.count_reserved = self.product.stack_size
+        return _reserved
+
+
+    def unreserve(self):
+        self.count -= self.count_reserved
+        self.count_reserved = 0
+        if self.count == 0:
+            self.name = "Empty"
+            self.product = None
+            self.empty = True
+            
+    
+    def increase(self):
+        self.count_reserved = 0
 
 
 
@@ -146,10 +192,6 @@ class Product:
 
 
 def create_miniimal_train():
-
-
-
-
     pass
 
 
@@ -157,11 +199,8 @@ def print_recipe_breakdown(product):
     if product is None:
         return
 
-    
-    
     for _component in product.components:
         pass
-
 
 
 def create_product(product_name, product_dict):
