@@ -8,6 +8,9 @@ with open("data/wiki-recipes-0.17.52.json", "r") as recipe_file:
 with open("data/wiki-items-0.17.52.json", "r") as item_file:
     items = json.load(item_file)
 
+# Train contants.
+INITAL_OUTPUT = 1
+
 # Wagon constants.
 STACK_CAPACITY = 40
 
@@ -26,22 +29,70 @@ BCN_SPD     = MOD_PER_BCN * SPD_MOD_SPD * BCN_EFF
 
 class Train:
     def __init__(self, product):
+        self.name = product.name
+        self.product = product
         self.wagons = []
-        self.wagon_tree = self.create_wagon_tree(product)
-        if self.wagon_tree is None:
-            print("Error: Failed to create wagon tree")
+        
+
+    def unreserve_all(self):
+        for _wagon in self.wagons:
+                _wagon.unreserve_all()
+
+
+    def increase_all(self):
+        for _wagon in self.wagons:
+                _wagon.confirm_all()
 
 
     def create_wagon_tree(self, product):
         _wagon = Wagon(product, Station())
+
+        # Link previous wagon wagon to this wagon
+        if len(self.wagons) > 0:
+            self.wagons[-1].prev_wagon = _wagon
+    
         self.wagons.append(_wagon)
+
+        # Create supplier wagon(s) for each component.
         for _component in product.components:
-            _wagon.suppliers[product.name] = self.create_wagon_tree(_component.product)
+            _wagon.suppliers[_component.name] = self.create_wagon_tree(_component.product)
         return _wagon
 
+
+    def create_minimal_train(self):
+        print("Creating minimal train...")
+        self.wagon_tree = self.create_wagon_tree(self.product)
+        if self.wagon_tree is None:
+            print("Error: Failed to create wagon tree")
+            return False
+        if not self.wagon_tree.reserve_output(INITAL_OUTPUT):
+            print("Error: Minimal train resvation failed")
+            return False
+        print("Minimal train created!")
+        return True
+        
+
     def print(self):
+        print("---------------------------")
+        print("Train producing:", self.name)
+        if len(self.wagons) == 0:
+            print("Train is empty")
+            return
+
+        print("Wagons:\n") #TODO: Move to Wagon print method
         for _wagon in self.wagons:
-            print(_wagon.name)
+            print("Wagon output:", _wagon.name)
+            print("Stacks:")
+            _empty_stacks = 0
+            for _stack in _wagon.stacks:
+                if _stack.empty:
+                    _empty_stacks += 1
+                else:
+                    print(" - ",_stack.name, ":", _stack.count)
+            print(" -  Empty stacks:", _empty_stacks)
+        _initial_wagon = self.wagons[-1]
+        print("\nInitial wagon: ", _initial_wagon.name)
+        print("---------------------------")
 
 
 
@@ -50,66 +101,83 @@ class Wagon:
         self.name = product.name
         self.product = product
         self.station = station
-        self.output_stacks = [Stack()] * STACK_CAPACITY
+        self.stacks = [Stack() for i in range(STACK_CAPACITY)]
         self.suppliers = {}
-       
+        self.next_wagon = None
+        self.prev_wagon = None
 
+        
     def unreserve_all(self):
-        for _stack in self.output_stacks:
+        for _stack in self.stacks:
                 _stack.unreserve()
 
 
-    def increase_all(self):
-        for _stack in self.output_stacks:
-                _stack.increase()
+    def confirm_all(self):
+        for _stack in self.stacks:
+                _stack.confirm()
+    
+
+    def reserve_space(self, product, amount):
+        # Reserve any non-empty stack of the same item.
+        for _stack in self.stacks:
+            if _stack.empty:
+                continue
+            _reserved = _stack.reserve(self.product, amount)
+            if _reserved > 0:
+                amount -= _reserved
+                break
         
-        
-    def increase_output(self, amount):
-        # Find smallest amount of production cycles that will produce at least amount
+        if amount == 0:
+            return True
+
+        # Reserve empty stack(s) for the remaining amount.
+        for _stack in self.stacks:
+            if not _stack.empty:
+                continue
+            amount -= _stack.reserve(self.product, amount)
+            if amount == 0:
+                return True
+            
+        # Not enough room in the wagon.
+        print("Warning: Not enough room: ", product.name)#TODO: Provide better feedback
+        return False
+
+    
+    def reserve_output(self, amount):
+        # Find smallest amount of production cycles that will produce at least amount.
         _production_cycles = amount
         while (_production_cycles-1) * self.station.productivity >= amount:
             _production_cycles -= 1
-        _output_left = _production_cycles * self.station.productivity
+        _product_increase = _production_cycles * self.station.productivity
 
-        # Reserve any non-empty stack of the same item
-        for _stack in self.output_stacks:
-            if _stack.empty:
-                continue
-            _reserved = _stack.reserve(self.product, _output_left)
-            if _reserved > 0:
-                _output_left -= _reserved
-                break
+        # Reserve space for this wagons output.
+        self.reserve_space(self.product, _product_increase)
 
-        # Reserve empty stack(s) for the remaining amount
-        for _stack in self.output_stacks:
-            if not _stack.empty:
-                continue
-            _output_left -= _stack.reserve(self.product, _output_left)
-
-        # Not enough room in the wagon.
-        if _output_left > 0:
-            print("Warning: Not enough room")#TODO: Provide better feedback
-            self.unreserve_all()
-            return False
-
-        # Recursively check if supplier wagons can increase output.
         for _component in self.product.components:
-            _supplier = suppliers.get(_component.name)
-            if _supplier == None:
-                print("Error: Wagon supplier not found")
-                self.unreserve_all()
+            _component_increase = _production_cycles * _component.amount
+            _wagon_iter = self.prev_wagon
+            _supplier = self.suppliers.get(_component.name)
+
+            if _supplier is None:
+                print("Error:", self.name, "can not find supplier for", _component.name)
                 return False
-            
-            _output_increase = _component.amount * _production_cycles
-            if not _supplier.increase_output(_output_increase):
-                self.unreserve_all()
-                return False
-            
-        #Increase output
-        self.increase_all()
+
+            # Reserve space for the component in the wagons between this and the supplier.
+            while _wagon_iter is not _supplier:
+                if _wagon_iter is None:
+                    print("Error: Wagon iterator is None")
+                    return False
+
+                if not _wagon_iter.reserve_space(_component.product, _component_increase):
+                    return False
+                _wagon_iter = _wagon_iter.prev_wagon
+
+            # Recursively reserve output of supplier.
+            if not _wagon_iter.reserve_output(_component_increase):
+               return False
         return True
 
-        
+
 
 class Station:
     def __init__(self, asm = 2, bcn_per_asm = 8):
@@ -123,8 +191,9 @@ class Station:
     def print(self):
         print("---------------------------")
         print("Station crafting speed:", self.crafting_speed)
-        print("Station productivity:", self.productivity)
+        print("Station productivity  :", self.productivity)
         print("---------------------------")
+
 
 
 class Stack:
@@ -149,15 +218,15 @@ class Stack:
             self.empty = False
         
         # The stack can fit the entire amount.
-        if self.count + amount < product.stack_size:
+        if self.count + amount <= product.stack_size:
             self.count += amount
             self.count_reserved += amount
             return amount
         
         # The stack can fit the some of the amount.
         _reserved = self.product.stack_size - self.count
-        self.count = self.product.stack_size
-        self.count_reserved = self.product.stack_size
+        self.count += _reserved
+        self.count_reserved += _reserved
         return _reserved
 
 
@@ -170,7 +239,7 @@ class Stack:
             self.empty = True
             
     
-    def increase(self):
+    def confirm(self):
         self.count_reserved = 0
 
 
@@ -204,11 +273,6 @@ class Product:
         for _component in self.components:
             _component.print()
         print("---------------------------")
-
-
-def create_minimal_train(product):
-
-    pass
 
 
 def print_recipe_breakdown(product):
@@ -268,7 +332,8 @@ def main(as_module=False):
         return
 
     # Create rooted product graph
-    _product_name = str(sys.argv[1]) #TODO: Concatenate 1 - n args
+    _separator = " "
+    _product_name = _separator.join(sys.argv[1:])
     _product_dict = {}
     _product = create_product_graph(_product_name, _product_dict)
     if _product is None :
@@ -281,6 +346,7 @@ def main(as_module=False):
     _station.print()
 
     _test_train = Train(_product)
+    _test_train.create_minimal_train()
     _test_train.print()
 
 if __name__ == "__main__":
