@@ -125,16 +125,16 @@ class Station:
 
 
 class Wagon:
-    def __init__(self, product, station):
-        self.name = product.name
-        self.product = product
+    def __init__(self, output, station):
+        self.name = output.name
+        self.output = output
         self.station = station
         self.stacks = [Stack() for i in range(STACK_CAPACITY)]
         self.suppliers = {}
         self.next_wagon = None
         self.prev_wagon = None
 
-        
+
     def unreserve_all(self):
         for _stack in self.stacks:
                 _stack.unreserve()
@@ -150,19 +150,15 @@ class Wagon:
         for _stack in self.stacks:
             if _stack.empty:
                 continue
-            _reserved = _stack.reserve(self.product, amount)
-            if _reserved > 0:
-                amount -= _reserved
-                break
-        
-        if amount == 0:
-            return True
+            amount -= _stack.reserve(product, amount)
+            if amount == 0:
+                return True
 
         # Reserve empty stack(s) for the remaining amount.
         for _stack in self.stacks:
             if not _stack.empty:
                 continue
-            amount -= _stack.reserve(self.product, amount)
+            amount -= _stack.reserve(product, amount)
             if amount == 0:
                 return True
             
@@ -179,12 +175,12 @@ class Wagon:
         _product_increase = _production_cycles * self.station.productivity
 
         # Reserve space for this wagons output.
-        self.reserve_space(self.product, _product_increase)
+        self.reserve_space(self.output, _product_increase)
 
-        for _component in self.product.components:
+        for _component in self.output.components:
             _component_increase = _production_cycles * _component.amount
-            _wagon_iter = self.prev_wagon
             _supplier = self.suppliers.get(_component.name)
+            _wagon_iter = self.prev_wagon
 
             if _supplier is None:
                 print("Error:", self.name, "can not find supplier for", _component.name)
@@ -203,14 +199,26 @@ class Wagon:
             # Recursively reserve output of supplier.
             if not _wagon_iter.reserve_output(_component_increase):
                return False
-        return True        
+        return True
+
+
+    def print(self):
+        print("Wagon output:", self.name)
+        print("Stacks:")
+        _empty_stacks = 0
+        for _stack in self.stacks:
+            if _stack.empty:
+                _empty_stacks += 1
+            else:
+                print(" - ",_stack.name, ":", _stack.count)
+        print(" -  Empty stacks :", _empty_stacks)       
 
 
 
 class Train:
-    def __init__(self, product):
-        self.name = product.name
-        self.product = product
+    def __init__(self, output):
+        self.name = output.name
+        self.output = output
         self.wagons = []
         
 
@@ -241,7 +249,7 @@ class Train:
 
     def create_minimal_train(self):
         print("Creating minimal train...")
-        self.wagon_tree = self.create_wagon_tree(self.product)
+        self.wagon_tree = self.create_wagon_tree(self.output)
         if self.wagon_tree is None:
             print("Error: Failed to create wagon tree")
             return False
@@ -261,15 +269,8 @@ class Train:
 
         print("Wagons:\n") #TODO: Move to Wagon print method
         for _wagon in self.wagons:
-            print("Wagon output:", _wagon.name)
-            print("Stacks:")
-            _empty_stacks = 0
-            for _stack in _wagon.stacks:
-                if _stack.empty:
-                    _empty_stacks += 1
-                else:
-                    print(" - ",_stack.name, ":", _stack.count)
-            print(" -  Empty stacks:", _empty_stacks)
+            _wagon.print()
+
         _initial_wagon = self.wagons[-1]
         print("\nInitial wagon: ", _initial_wagon.name)
         print("---------------------------")
