@@ -27,71 +27,99 @@ BCN_SPD     = MOD_PER_BCN * SPD_MOD_SPD * BCN_EFF
 
 
 
-class Train:
-    def __init__(self, product):
-        self.name = product.name
-        self.product = product
-        self.wagons = []
-        
-
-    def unreserve_all(self):
-        for _wagon in self.wagons:
-                _wagon.unreserve_all()
-
-
-    def increase_all(self):
-        for _wagon in self.wagons:
-                _wagon.confirm_all()
-
-
-    def create_wagon_tree(self, product):
-        _wagon = Wagon(product, Station())
-
-        # Link previous wagon wagon to this wagon
-        if len(self.wagons) > 0:
-            self.wagons[-1].prev_wagon = _wagon
-    
-        self.wagons.append(_wagon)
-
-        # Create supplier wagon(s) for each component.
-        for _component in product.components:
-            _wagon.suppliers[_component.name] = self.create_wagon_tree(_component.product)
-        return _wagon
-
-
-    def create_minimal_train(self):
-        print("Creating minimal train...")
-        self.wagon_tree = self.create_wagon_tree(self.product)
-        if self.wagon_tree is None:
-            print("Error: Failed to create wagon tree")
-            return False
-        if not self.wagon_tree.reserve_output(INITAL_OUTPUT):
-            print("Error: Minimal train resvation failed")
-            return False
-        print("Minimal train created!")
-        return True
-        
+class Product:
+    def __init__(self, name):
+        self.name = name
+        self.time = 0
+        self.stack_size = 0
+        self.components = []
 
     def print(self):
         print("---------------------------")
-        print("Train producing:", self.name)
-        if len(self.wagons) == 0:
-            print("Train is empty")
-            return
+        print("Product:", self.name)
+        print("Stack size:", self.stack_size)
+        print("Components:")
+        for _component in self.components:
+            _component.print()
+        print("---------------------------")
 
-        print("Wagons:\n") #TODO: Move to Wagon print method
-        for _wagon in self.wagons:
-            print("Wagon output:", _wagon.name)
-            print("Stacks:")
-            _empty_stacks = 0
-            for _stack in _wagon.stacks:
-                if _stack.empty:
-                    _empty_stacks += 1
-                else:
-                    print(" - ",_stack.name, ":", _stack.count)
-            print(" -  Empty stacks:", _empty_stacks)
-        _initial_wagon = self.wagons[-1]
-        print("\nInitial wagon: ", _initial_wagon.name)
+
+
+class Component:
+    def __init__(self, product, amount):
+        self.name = product.name
+        self.product = product
+        self.amount = amount
+        
+    def print(self):
+        print()
+        print(" - ", self.name)
+        print("    Amount:", self.amount)
+        print("    Stack size:", self.product.stack_size)
+
+
+
+class Stack:
+    def __init__(self):
+        self.name = "Empty"
+        self.product = None
+        self.count = 0
+        self.count_reserved = 0
+        self.empty = True
+
+
+    def reserve(self, product, amount):
+        if not self.empty:
+            if self.count == self.product.stack_size:
+                return 0
+            if product.name != self.name:
+                return 0
+
+        if self.empty:
+            self.name = product.name
+            self.product = product
+            self.empty = False
+        
+        # The stack can fit the entire amount.
+        if self.count + amount <= product.stack_size:
+            self.count += amount
+            self.count_reserved += amount
+            return amount
+        
+        # The stack can fit the some of the amount.
+        _reserved = self.product.stack_size - self.count
+        self.count += _reserved
+        self.count_reserved += _reserved
+        return _reserved
+
+
+    def unreserve(self):
+        self.count -= self.count_reserved
+        self.count_reserved = 0
+        if self.count == 0:
+            self.name = "Empty"
+            self.product = None
+            self.empty = True
+            
+    
+    def confirm(self):
+        self.count_reserved = 0
+
+
+
+class Station:
+    def __init__(self, asm = 2, bcn_per_asm = 8):
+        self.asm = asm
+        self.bcn_per_asm = bcn_per_asm
+        self.crafting_speed = asm * (ASM_SPD * (1 + (BCN_SPD * bcn_per_asm) + (PRD_MOD_SPD * MOD_PER_ASM)))
+        self.productivity = ASM_PRD * (1 + (PRD_MOD_PRD * MOD_PER_ASM))
+        #TODO: Calculate efficiency
+
+
+    def print(self):
+        print("---------------------------")
+        print("Station crafting speed:", self.crafting_speed)
+        print("Station productivity  :", self.productivity)
         print("---------------------------")
 
 
@@ -175,104 +203,77 @@ class Wagon:
             # Recursively reserve output of supplier.
             if not _wagon_iter.reserve_output(_component_increase):
                return False
-        return True
+        return True        
 
 
 
-class Station:
-    def __init__(self, asm = 2, bcn_per_asm = 8):
-        self.asm = asm
-        self.bcn_per_asm = bcn_per_asm
-        self.crafting_speed = asm * (ASM_SPD * (1 + (BCN_SPD * bcn_per_asm) + (PRD_MOD_SPD * MOD_PER_ASM)))
-        self.productivity = ASM_PRD * (1 + (PRD_MOD_PRD * MOD_PER_ASM))
-        #TODO: Calculate efficiency
-
-
-    def print(self):
-        print("---------------------------")
-        print("Station crafting speed:", self.crafting_speed)
-        print("Station productivity  :", self.productivity)
-        print("---------------------------")
-
-
-
-class Stack:
-    def __init__(self):
-        self.name = "Empty"
-        self.product = None
-        self.count = 0
-        self.count_reserved = 0
-        self.empty = True
-
-
-    def reserve(self, product, amount):
-        if not self.empty:
-            if self.count == self.product.stack_size:
-                return 0
-            if product.name != self.name:
-                return 0
-
-        if self.empty:
-            self.name = product.name
-            self.product = product
-            self.empty = False
-        
-        # The stack can fit the entire amount.
-        if self.count + amount <= product.stack_size:
-            self.count += amount
-            self.count_reserved += amount
-            return amount
-        
-        # The stack can fit the some of the amount.
-        _reserved = self.product.stack_size - self.count
-        self.count += _reserved
-        self.count_reserved += _reserved
-        return _reserved
-
-
-    def unreserve(self):
-        self.count -= self.count_reserved
-        self.count_reserved = 0
-        if self.count == 0:
-            self.name = "Empty"
-            self.product = None
-            self.empty = True
-            
-    
-    def confirm(self):
-        self.count_reserved = 0
-
-
-
-class Component:
-    def __init__(self, product, amount):
+class Train:
+    def __init__(self, product):
         self.name = product.name
         self.product = product
-        self.amount = amount
-        
-    def print(self):
-        print()
-        print(" - ", self.name)
-        print("    Amount:", self.amount)
-        print("    Stack size:", self.product.stack_size)
+        self.wagons = []
         
 
+    def unreserve_all(self):
+        for _wagon in self.wagons:
+                _wagon.unreserve_all()
 
-class Product:
-    def __init__(self, name):
-        self.name = name
-        self.time = 0
-        self.stack_size = 0
-        self.components = []
+
+    def increase_all(self):
+        for _wagon in self.wagons:
+                _wagon.confirm_all()
+
+
+    def create_wagon_tree(self, product):
+        _wagon = Wagon(product, Station())
+
+        # Link previous wagon wagon to this wagon
+        if len(self.wagons) > 0:
+            self.wagons[-1].prev_wagon = _wagon
+    
+        self.wagons.append(_wagon)
+
+        # Create supplier wagon(s) for each component.
+        for _component in product.components:
+            _wagon.suppliers[_component.name] = self.create_wagon_tree(_component.product)
+        return _wagon
+
+
+    def create_minimal_train(self):
+        print("Creating minimal train...")
+        self.wagon_tree = self.create_wagon_tree(self.product)
+        if self.wagon_tree is None:
+            print("Error: Failed to create wagon tree")
+            return False
+        if not self.wagon_tree.reserve_output(INITAL_OUTPUT):
+            print("Error: Minimal train resvation failed")
+            return False
+        print("Minimal train created!")
+        return True
+        
 
     def print(self):
         print("---------------------------")
-        print("Product:", self.name)
-        print("Stack size:", self.stack_size)
-        print("Components:")
-        for _component in self.components:
-            _component.print()
+        print("Train producing:", self.name)
+        if len(self.wagons) == 0:
+            print("Train is empty")
+            return
+
+        print("Wagons:\n") #TODO: Move to Wagon print method
+        for _wagon in self.wagons:
+            print("Wagon output:", _wagon.name)
+            print("Stacks:")
+            _empty_stacks = 0
+            for _stack in _wagon.stacks:
+                if _stack.empty:
+                    _empty_stacks += 1
+                else:
+                    print(" - ",_stack.name, ":", _stack.count)
+            print(" -  Empty stacks:", _empty_stacks)
+        _initial_wagon = self.wagons[-1]
+        print("\nInitial wagon: ", _initial_wagon.name)
         print("---------------------------")
+
 
 
 def print_recipe_breakdown(product):
@@ -324,6 +325,9 @@ def create_product_graph(product_name, product_dict):
             _new_component = Component(_new_product, _component[1])
             _product.components.append(_new_component)
     return _product
+
+
+    
     
 
 def main(as_module=False):
@@ -348,6 +352,5 @@ def main(as_module=False):
     _test_train = Train(_product)
     _test_train.create_minimal_train()
     _test_train.print()
-
 if __name__ == "__main__":
     main(as_module=True)
