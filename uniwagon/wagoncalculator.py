@@ -25,7 +25,8 @@ ASM_SPD     = 1.25
 ASM_PRD     = 1
 BCN_SPD     = MOD_PER_BCN * SPD_MOD_SPD * BCN_EFF
 
-
+# Printout constants.
+LINE_LEN = 41
 
 class Product:
     def __init__(self, name):
@@ -35,13 +36,12 @@ class Product:
         self.components = []
 
     def print(self):
-        print("---------------------------")
-        print("Product:", self.name)
+        print("\n{0:-^{line_len}s}\n".format(self.name, line_len=LINE_LEN))
         print("Stack size:", self.stack_size)
         print("Components:")
         for _component in self.components:
             _component.print()
-        print("---------------------------")
+        print("\n{0:-^{line_len}s}\n".format("", line_len=LINE_LEN))
 
 
 
@@ -117,10 +117,10 @@ class Station:
 
 
     def print(self):
-        print("---------------------------")
+        print("\n{0:-^{line_len}s}\n".format("Station", line_len=LINE_LEN))
         print("Station crafting speed:", self.crafting_speed)
         print("Station productivity  :", self.productivity)
-        print("---------------------------")
+        print("\n{0:-^{line_len}s}\n".format("", line_len=LINE_LEN))
 
 
 
@@ -203,15 +203,13 @@ class Wagon:
 
 
     def print(self):
-        print("Wagon output:", self.name)
-        print("Stacks:")
         _empty_stacks = 0
         for _stack in self.stacks:
             if _stack.empty:
                 _empty_stacks += 1
             else:
-                print(" - ",_stack.name, ":", _stack.count)
-        print(" -  Empty stacks :", _empty_stacks)       
+                print(" - {0:<25} : {1:>10.2f}".format(_stack.name, _stack.count))
+        print(" - {0:<25} : {1:>10.2f}\n".format("Empty stacks", _empty_stacks))
 
 
 
@@ -220,6 +218,7 @@ class Train:
         self.name = output.name
         self.output = output
         self.wagons = []
+        self.wagon_tree = None
         
 
     def unreserve_all(self):
@@ -227,9 +226,9 @@ class Train:
                 _wagon.unreserve_all()
 
 
-    def increase_all(self):
+    def confirm_all(self):
         for _wagon in self.wagons:
-                _wagon.confirm_all()
+            _wagon.confirm_all()
 
 
     def create_wagon_tree(self, product):
@@ -247,34 +246,40 @@ class Train:
         return _wagon
 
 
-    def create_minimal_train(self):
-        print("Creating minimal train...")
-        self.wagon_tree = self.create_wagon_tree(self.output)
+    def find_max_output(self):
+        # Create tree of Wagons.
         if self.wagon_tree is None:
-            print("Error: Failed to create wagon tree")
-            return False
-        if not self.wagon_tree.reserve_output(INITAL_OUTPUT):
-            print("Error: Minimal train resvation failed")
-            return False
-        print("Minimal train created!")
+            print("Creating minimal train...")
+            self.wagon_tree = self.create_wagon_tree(self.output)
+        
+            if self.wagon_tree is None:
+                print("Error: Failed to create wagon tree")
+                return False
+        
+        # Find the max output with this train configuration.
+        _i = 0
+        while True:
+            if not self.wagon_tree.reserve_output(_i):
+                self.unreserve_all()
+                break
+            self.confirm_all()
+            _i += 1
+
         return True
         
 
     def print(self):
-        print("---------------------------")
-        print("Train producing:", self.name)
+        print("\n{0:-^{line_len}s}\n".format(self.name + " train", line_len=LINE_LEN))
         if len(self.wagons) == 0:
             print("Train is empty")
             return
 
-        print("Wagons:\n") #TODO: Move to Wagon print method
+        _wagon_num = 1
         for _wagon in self.wagons:
+            print("Wagon {} --> {}".format(_wagon_num, _wagon.name))
             _wagon.print()
-
-        _initial_wagon = self.wagons[-1]
-        print("\nInitial wagon: ", _initial_wagon.name)
-        print("---------------------------")
-
+            _wagon_num += 1
+        print("\n{0:-^{line_len}s}\n".format("", line_len=LINE_LEN))
 
 
 def print_recipe_breakdown(product):
@@ -300,7 +305,7 @@ def create_product_graph(product_name, product_dict):
     # Get the components required for the normal recipe.
     _components = _recipe.get("recipe")
     if _components is None:
-        print("File format error: No \"recipe\" key found for: ", product_name)
+        print("File format error: No \"recipe\" key found for: {}".format(product_name))
         return None
 
     # Get the product item information.
@@ -311,7 +316,7 @@ def create_product_graph(product_name, product_dict):
     # Get the stack size of the product.
     _stack_size = _item.get("stack-size")
     if _stack_size is None:
-        print("File format error: No \"stack-size\" key found for: ", product_name)
+        print("File format error: No \"stack-size\" key found for: {}".format(product_name))
         return None
 
     # Create and initialize new product.
@@ -342,7 +347,7 @@ def main(as_module=False):
     _product_dict = {}
     _product = create_product_graph(_product_name, _product_dict)
     if _product is None :
-        print("Argument error: No recipe entry found for: ", _product_name)
+        print("Argument error: No recipe entry found for: {}".format(_product_name))
         return
 
     print("Recipe created for: ", _product.name)
@@ -351,7 +356,9 @@ def main(as_module=False):
     _station.print()
 
     _test_train = Train(_product)
-    _test_train.create_minimal_train()
+    _test_train.find_max_output()
     _test_train.print()
+
+
 if __name__ == "__main__":
     main(as_module=True)
