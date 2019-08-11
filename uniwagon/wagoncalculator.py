@@ -34,6 +34,7 @@ class Product:
         self.time = 0
         self.stack_size = 0
         self.components = []
+        self.is_base = False
 
     def print(self):
         print("\n{0:-^{line_len}s}\n".format(self.name, line_len=LINE_LEN))
@@ -143,7 +144,7 @@ class Wagon:
     def confirm_all(self):
         for _stack in self.stacks:
                 _stack.confirm()
-    
+
 
     def reserve_space(self, product, amount):
         # Reserve any non-empty stack of the same item.
@@ -175,30 +176,29 @@ class Wagon:
         _product_increase = _production_cycles * self.station.productivity
 
         # Reserve space for this wagons output.
-        self.reserve_space(self.output, _product_increase)
+        if not self.reserve_space(self.output, _product_increase):
+            return False
 
         for _component in self.output.components:
             _component_increase = _production_cycles * _component.amount
             _supplier = self.suppliers.get(_component.name)
             _wagon_iter = self.prev_wagon
 
-            if _supplier is None:
-                print("Error:", self.name, "can not find supplier for", _component.name)
-                return False
-
-            # Reserve space for the component in the wagons between this and the supplier.
+            # Reserve space until the supplier or the base wagon is reached.
             while _wagon_iter is not _supplier:
-                if _wagon_iter is None:
-                    print("Error: Wagon iterator is None")
-                    return False
-
-                if not _wagon_iter.reserve_space(_component.product, _component_increase):
+                if not _wagon_iter.reserve_space(_component.product, amount):
                     return False
                 _wagon_iter = _wagon_iter.prev_wagon
 
+            # Reserve space in the base wagon.
+            if _component.product.is_base:
+                if not _wagon_iter.reserve_space(_component.product, amount):
+                    return False
+                continue
+
             # Recursively reserve output of supplier.
-            if not _wagon_iter.reserve_output(_component_increase):
-               return False
+            if not _supplier.reserve_output(_component_increase):
+                return False
         return True
 
 
@@ -219,6 +219,7 @@ class Train:
         self.output = output
         self.wagons = []
         self.wagon_tree = None
+        self.base_wagon = Wagon(Product("Base"), Station())
         
 
     def unreserve_all(self):
@@ -232,9 +233,13 @@ class Train:
 
 
     def create_wagon_tree(self, product):
+        # Base products are supplied by the base wagon.
+        if product.is_base:
+            return self.base_wagon
+
         _wagon = Wagon(product, Station())
 
-        # Link previous wagon wagon to this wagon
+        # Link previous wagon wagon to this wagon. 
         if len(self.wagons) > 0:
             self.wagons[-1].prev_wagon = _wagon
     
@@ -255,6 +260,10 @@ class Train:
             if self.wagon_tree is None:
                 print("Error: Failed to create wagon tree")
                 return False
+            
+            # Place the base wagon at the end of the train.
+            self.wagons[-1].prev_wagon = self.base_wagon
+            self.wagons.append(self.base_wagon)
         
         # Find the max output with this train configuration.
         _i = 0
@@ -266,7 +275,7 @@ class Train:
             _i += 1
 
         return True
-        
+
 
     def print(self):
         print("\n{0:-^{line_len}s}\n".format(self.name + " train", line_len=LINE_LEN))
@@ -330,18 +339,20 @@ def create_product_graph(product_name, product_dict):
         if _new_product is not None:
             _new_component = Component(_new_product, _component[1])
             _product.components.append(_new_component)
+
+    # Products with no components are is_base.
+    if len(_product.components) == 0:
+        _product.is_base = True
+        print(_product.name,"is base")
     return _product
 
-
-    
-    
 
 def main(as_module=False):
     if len(sys.argv) <= 1:
         print("Error: No recipe name provided")
         return
 
-    # Create rooted product graph
+    # Create rooted product graph.
     _separator = " "
     _product_name = _separator.join(sys.argv[1:])
     _product_dict = {}
