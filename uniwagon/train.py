@@ -1,4 +1,4 @@
-from .constants import Constants as const
+from .constants import Const
 from .recipe import Product, Recipe
 
 class Stack:
@@ -53,16 +53,16 @@ class Station:
     def __init__(self, asm = 2, bcn_per_asm = 8):
         self.asm = asm
         self.bcn_per_asm = bcn_per_asm
-        self.crafting_speed = asm * (const.ASM_SPD * (1 + (const.BCN_SPD * bcn_per_asm) + (const.PRD_MOD_SPD * const.MOD_PER_ASM)))
-        self.productivity = const.ASM_PRD * (1 + (const.PRD_MOD_PRD * const.MOD_PER_ASM))
+        self.crafting_speed = asm * (Const.ASM_SPD * (1 + (Const.BCN_SPD * bcn_per_asm) + (Const.PRD_MOD_SPD * Const.MOD_PER_ASM)))
+        self.productivity = Const.ASM_PRD * (1 + (Const.PRD_MOD_PRD * Const.MOD_PER_ASM))
         #TODO: Calculate efficiency
 
 
     def print(self):
-        print("\n{0:-^{line_len}s}\n".format("Station", line_len=const.LINE_LEN))
+        print("\n{0:-^{line_len}s}\n".format("Station", line_len=Const.LINE_LEN))
         print("Station crafting speed:", self.crafting_speed)
         print("Station productivity  :", self.productivity)
-        print("\n{0:-^{line_len}s}\n".format("", line_len=const.LINE_LEN))
+        print("\n{0:-^{line_len}s}\n".format("", line_len=Const.LINE_LEN))
 
 
 
@@ -81,18 +81,8 @@ class Wagon:
         self.name = output.name
         self.output = output
         self.station = station
-        self.stacks = [Stack() for i in range(const.STACK_CAPACITY)]
+        self.stacks = [Stack() for i in range(Const.STACK_CAPACITY)]
         return True
-
-
-    def unreserve_all(self):
-        for _stack in self.stacks:
-                _stack.unreserve()
-
-
-    def confirm_all(self):
-        for _stack in self.stacks:
-                _stack.confirm()
 
 
     def reserve_space(self, product, amount):
@@ -151,6 +141,16 @@ class Wagon:
         return True
 
 
+    def unreserve_all(self):
+        for _stack in self.stacks:
+                _stack.unreserve()
+
+
+    def confirm_all(self):
+        for _stack in self.stacks:
+                _stack.confirm()
+
+
     def print(self):
         _empty_stacks = 0
         for _stack in self.stacks:
@@ -171,6 +171,7 @@ class Train:
         self.wagon_tree = None
         self.base_wagon = None
 
+
     def create(self, config, recipe):
         self.name = recipe.root.name
         self.output = recipe.root
@@ -181,7 +182,7 @@ class Train:
             print("Train erro: Failed to create base wagon")
             return False
 
-        self.wagon_tree = self.create_wagon_tree(recipe.root)
+        self.wagon_tree = self.create_tree(recipe.root)
         if self.wagon_tree is self.base_wagon:
             print("Train error: Failed to create train")
             return False
@@ -190,19 +191,9 @@ class Train:
         self.wagons[-1].prev_wagon = self.base_wagon
         self.wagons.append(self.base_wagon)
         return True
+   
 
-
-    def unreserve_all(self):
-        for _wagon in self.wagons:
-            _wagon.unreserve_all()
-
-
-    def confirm_all(self):
-        for _wagon in self.wagons:
-            _wagon.confirm_all()
-
-
-    def create_wagon_tree(self, product):
+    def create_tree(self, product):
         # Base products are supplied by the base wagon.
         if product.is_base:
             return self.base_wagon
@@ -220,7 +211,7 @@ class Train:
 
         # Create supplier wagon(s) for each component.
         for _component in product.components:
-            _wagon.suppliers[_component.name] = self.create_wagon_tree(_component.product)
+            _wagon.suppliers[_component.name] = self.create_tree(_component.product)
         return _wagon
 
 
@@ -236,8 +227,19 @@ class Train:
         return True
 
 
+    def unreserve_all(self):
+        for _wagon in self.wagons:
+            _wagon.unreserve_all()
+
+
+    def confirm_all(self):
+        for _wagon in self.wagons:
+            _wagon.confirm_all()
+
+
+
     def print(self):
-        print("\n{0:-^{line_len}s}\n".format(self.name + " train", line_len=const.LINE_LEN))
+        print("\n{0:-^{line_len}s}\n".format(self.name + " train", line_len=Const.LINE_LEN))
         if len(self.wagons) == 0:
             print("Train is empty")
             return
@@ -247,4 +249,4 @@ class Train:
             print("Wagon {} --> {}".format(_wagon_num, _wagon.name))
             _wagon.print()
             _wagon_num += 1
-        print("\n{0:-^{line_len}s}\n".format("", line_len=const.LINE_LEN))
+        print("\n{0:-^{line_len}s}\n".format("", line_len=Const.LINE_LEN))

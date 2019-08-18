@@ -7,7 +7,7 @@ from .train import Train
 
 def main():
     if len(sys.argv) <= 1:
-        print("Error: No train config name provided")
+        print("Error: No trainconfig provided")
         return
     
     # Parse command line arguments.
@@ -16,12 +16,12 @@ def main():
     
     # Parse production line config file.
     _config = TrainConfig()
-    if not _config.load(_config_name):
+    if not _config.create(_config_name):
         return
     
     # Parse game data files at path specified by config.
     _data = GameData()
-    if not _data.load(_config):
+    if not _data.create(_config):
         return
     
     # Create the Recipe specified by config.
