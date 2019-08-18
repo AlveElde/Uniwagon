@@ -1,4 +1,4 @@
-class Constants:
+class Const:
     # Train contants.
     INITAL_OUTPUT = 1
 

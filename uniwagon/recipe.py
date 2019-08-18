@@ -1,10 +1,4 @@
-#import sys
-#import json
-#from .const import Constants as const
-# with open("data/wiki-recipes-0.17.52.json", "r") as recipe_file:
-#     recipes = json.load(recipe_file)
-# with open("data/wiki-items-0.17.52.json", "r") as item_file:
-#     items = json.load(item_file)
+from .constants import Const
 
 class Product:
     def __init__(self, name):
@@ -15,12 +9,12 @@ class Product:
         self.is_base = False
 
     def print(self):
-        print("\n{0:-^{line_len}s}\n".format(self.name, line_len=const.LINE_LEN))
+        print("\n{0:-^{line_len}s}\n".format(self.name, line_len=Const.LINE_LEN))
         print("Stack size:", self.stack_size)
         print("Components:")
         for _component in self.components:
             _component.print()
-        print("\n{0:-^{line_len}s}\n".format("", line_len=const.LINE_LEN))
+        print("\n{0:-^{line_len}s}\n".format("", line_len=Const.LINE_LEN))
 
 
 
@@ -46,7 +40,10 @@ class Recipe:
         _created_products = {}
         self.root = self.create_tree(config.output_name, _created_products, data.recipes, data.items)
         if self.root is None:
+            print("Recipe error: Failed to create recipe.")
             return False
+
+        self.set_base_products(config.base_products, _created_products)
         return True
 
     def create_tree(self, product_name, created_products, recipes, items):
@@ -97,5 +94,13 @@ class Recipe:
             _product.is_base = True
         return _product
 
+    def set_base_products(self, base_products, created_products):
+        for _product_name in base_products:
+            _product = created_products.get(_product_name)
+            if _product is not None:
+                _product.is_base = True
+            else:
+                print("Recipe warning: Base product \"{}\" not found.".format(_product_name))
+
     def print(self):
-        pass
+        self.root.print()
