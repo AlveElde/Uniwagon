@@ -1,64 +1,5 @@
-import copy
-import json
-import sys
-
-with open("data/wiki-recipes-0.17.52.json", "r") as recipe_file:
-    recipes = json.load(recipe_file)
-
-with open("data/wiki-items-0.17.52.json", "r") as item_file:
-    items = json.load(item_file)
-
-# Train contants.
-INITAL_OUTPUT = 1
-
-# Wagon constants.
-STACK_CAPACITY = 40
-
-# Station constants.
-MOD_PER_ASM = 4
-MOD_PER_BCN = 2
-PRD_MOD_PRD = 0.10
-PRD_MOD_SPD = -0.15
-SPD_MOD_SPD = 0.50
-BCN_EFF     = 0.50
-ASM_SPD     = 1.25
-ASM_PRD     = 1
-BCN_SPD     = MOD_PER_BCN * SPD_MOD_SPD * BCN_EFF
-
-# Printout constants.
-LINE_LEN = 41
-
-class Product:
-    def __init__(self, name):
-        self.name = name
-        self.time = 0
-        self.stack_size = 0
-        self.components = []
-        self.is_base = False
-
-    def print(self):
-        print("\n{0:-^{line_len}s}\n".format(self.name, line_len=LINE_LEN))
-        print("Stack size:", self.stack_size)
-        print("Components:")
-        for _component in self.components:
-            _component.print()
-        print("\n{0:-^{line_len}s}\n".format("", line_len=LINE_LEN))
-
-
-
-class Component:
-    def __init__(self, product, amount):
-        self.name = product.name
-        self.product = product
-        self.amount = amount
-        
-    def print(self):
-        print()
-        print(" - ", self.name)
-        print("    Amount:", self.amount)
-        print("    Stack size:", self.product.stack_size)
-
-
+from .constants import Constants as const
+from .recipe import Product, Recipe
 
 class Stack:
     def __init__(self):
@@ -107,33 +48,41 @@ class Stack:
         self.count_reserved = 0
 
 
-
+#TODO: Move to separate file
 class Station:
     def __init__(self, asm = 2, bcn_per_asm = 8):
         self.asm = asm
         self.bcn_per_asm = bcn_per_asm
-        self.crafting_speed = asm * (ASM_SPD * (1 + (BCN_SPD * bcn_per_asm) + (PRD_MOD_SPD * MOD_PER_ASM)))
-        self.productivity = ASM_PRD * (1 + (PRD_MOD_PRD * MOD_PER_ASM))
+        self.crafting_speed = asm * (const.ASM_SPD * (1 + (const.BCN_SPD * bcn_per_asm) + (const.PRD_MOD_SPD * const.MOD_PER_ASM)))
+        self.productivity = const.ASM_PRD * (1 + (const.PRD_MOD_PRD * const.MOD_PER_ASM))
         #TODO: Calculate efficiency
 
 
     def print(self):
-        print("\n{0:-^{line_len}s}\n".format("Station", line_len=LINE_LEN))
+        print("\n{0:-^{line_len}s}\n".format("Station", line_len=const.LINE_LEN))
         print("Station crafting speed:", self.crafting_speed)
         print("Station productivity  :", self.productivity)
-        print("\n{0:-^{line_len}s}\n".format("", line_len=LINE_LEN))
+        print("\n{0:-^{line_len}s}\n".format("", line_len=const.LINE_LEN))
 
 
 
 class Wagon:
-    def __init__(self, output, station):
-        self.name = output.name
-        self.output = output
-        self.station = station
-        self.stacks = [Stack() for i in range(STACK_CAPACITY)]
+    def __init__(self):
+        self.name = ""
+        self.output = None
+        self.station = None
+        self.stacks = []
         self.suppliers = {}
         self.next_wagon = None
         self.prev_wagon = None
+
+
+    def create(self, output, station):
+        self.name = output.name
+        self.output = output
+        self.station = station
+        self.stacks = [Stack() for i in range(const.STACK_CAPACITY)]
+        return True
 
 
     def unreserve_all(self):
@@ -214,17 +163,38 @@ class Wagon:
 
 
 class Train:
-    def __init__(self, output):
-        self.name = output.name
-        self.output = output
+    def __init__(self):
+        self.name = ""
+        self.output = None
+        self.config = None
         self.wagons = []
         self.wagon_tree = None
-        self.base_wagon = Wagon(Product("Base"), Station())
-        
+        self.base_wagon = None
+
+    def create(self, config, recipe):
+        self.name = recipe.root.name
+        self.output = recipe.root
+        self.config = config
+
+        self.base_wagon = Wagon()
+        if not self.base_wagon.create(Product("Base"), Station()):
+            print("Train erro: Failed to create base wagon")
+            return False
+
+        self.wagon_tree = self.create_wagon_tree(recipe.root)
+        if self.wagon_tree is self.base_wagon:
+            print("Train error: Failed to create train")
+            return False
+
+        # Place the base wagon at the end of the train.
+        self.wagons[-1].prev_wagon = self.base_wagon
+        self.wagons.append(self.base_wagon)
+        return True
+
 
     def unreserve_all(self):
         for _wagon in self.wagons:
-                _wagon.unreserve_all()
+            _wagon.unreserve_all()
 
 
     def confirm_all(self):
@@ -237,7 +207,10 @@ class Train:
         if product.is_base:
             return self.base_wagon
 
-        _wagon = Wagon(product, Station())
+        _wagon = Wagon()
+        if not _wagon.create(product, Station()):
+            print("Train warning: Failed to create wagon for:", product.name)
+            return self.base_wagon
 
         # Link previous wagon wagon to this wagon. 
         if len(self.wagons) > 0:
@@ -252,19 +225,6 @@ class Train:
 
 
     def find_max_output(self):
-        # Create tree of Wagons.
-        if self.wagon_tree is None:
-            print("Creating minimal train...")
-            self.wagon_tree = self.create_wagon_tree(self.output)
-        
-            if self.wagon_tree is None:
-                print("Error: Failed to create wagon tree")
-                return False
-            
-            # Place the base wagon at the end of the train.
-            self.wagons[-1].prev_wagon = self.base_wagon
-            self.wagons.append(self.base_wagon)
-        
         # Find the max output with this train configuration.
         _i = 0
         while True:
@@ -273,12 +233,11 @@ class Train:
                 break
             self.confirm_all()
             _i += 1
-
         return True
 
 
     def print(self):
-        print("\n{0:-^{line_len}s}\n".format(self.name + " train", line_len=LINE_LEN))
+        print("\n{0:-^{line_len}s}\n".format(self.name + " train", line_len=const.LINE_LEN))
         if len(self.wagons) == 0:
             print("Train is empty")
             return
@@ -288,88 +247,4 @@ class Train:
             print("Wagon {} --> {}".format(_wagon_num, _wagon.name))
             _wagon.print()
             _wagon_num += 1
-        print("\n{0:-^{line_len}s}\n".format("", line_len=LINE_LEN))
-
-
-class ProductTree:
-    def __init__(self, product_name):
-        self.product_dict = {}
-        self.root = self.create_tree(product_name)
-
-    def create_tree(self, product_name):
-        # Check if the product has already been created.
-        _product = self.product_dict.get(product_name)
-        if _product is not None:
-            return _product
-        _product = Product(product_name)
-
-        # Get the product recipe.
-        _recipe = recipes.get(product_name)
-        if _recipe is None:
-            return None
-
-        # Get the components required for the normal recipe.
-        _components = _recipe.get("recipe")
-        if _components is None:
-            print("File format error: No \"recipe\" key found for: {}".format(product_name))
-            return None
-
-        # Get the product item information.
-        _item = items.get(product_name)
-        if _item is None:
-            return None
-
-        # Get the stack size of the product.
-        _stack_size = _item.get("stack-size")
-        if _stack_size is None:
-            print("File format error: No \"stack-size\" key found for: {}".format(product_name))
-            return None
-
-        # Create and initialize new product.
-        _product.time = _components[0][1]
-        _product.stack_size = _stack_size
-        self.product_dict[product_name] = _product
-
-        # Create Products for each component.
-        for _component in _components[1:]:
-            _new_product = self.create_tree(_component[0])
-            if _new_product is not None:
-                _new_component = Component(_new_product, _component[1])
-                _product.components.append(_new_component)
-
-        # Products with no components are base.
-        if len(_product.components) == 0:
-            _product.is_base = True
-        return _product
-
-    def print(self):
-        pass
-
-
-def main(as_module=False):
-    if len(sys.argv) <= 1:
-        print("Error: No recipe name provided")
-        return
-    
-    # Parse arguments.
-    _separator = " "
-    _product_name = _separator.join(sys.argv[1:])
-    
-    # Create a tree of products with the first argument as root.
-    _product_tree = ProductTree(_product_name)
-    if _product_tree.root is None :
-        print("Argument error: No recipe entry found for: {}".format(_product_name))
-        return
-
-    
-    _product_tree.root.print()
-    _station = Station()
-    _station.print()
-
-    _test_train = Train(_product_tree.root)
-    _test_train.find_max_output()
-    _test_train.print()
-
-
-if __name__ == "__main__":
-    main(as_module=True)
+        print("\n{0:-^{line_len}s}\n".format("", line_len=const.LINE_LEN))
