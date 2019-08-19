@@ -1,5 +1,3 @@
-from .constants import Const
-
 class Product:
     def __init__(self, name):
         self.name = name
@@ -8,13 +6,14 @@ class Product:
         self.components = []
         self.is_base = False
 
+
     def print(self):
-        print("\n{0:-^{line_len}s}\n".format(self.name, line_len=Const.LINE_LEN))
+        print("\n{0:-^{line_len}s}\n".format(self.name, line_len=LINE_LEN))
         print("Stack size:", self.stack_size)
         print("Components:")
         for _component in self.components:
             _component.print()
-        print("\n{0:-^{line_len}s}\n".format("", line_len=Const.LINE_LEN))
+        print("\n{0:-^{line_len}s}\n".format("", line_len=LINE_LEN))
 
 
 
@@ -23,7 +22,8 @@ class Component:
         self.name = product.name
         self.product = product
         self.amount = amount
-        
+
+
     def print(self):
         print()
         print(" - ", self.name)
@@ -36,6 +36,7 @@ class Recipe:
     def __init__(self):
         self.root = None
 
+
     def create(self, config, data):
         _created_products = {}
         self.root = self.create_tree(config.output_name, _created_products, data.recipes, data.items)
@@ -45,6 +46,7 @@ class Recipe:
 
         self.set_base_products(config.base_products, _created_products)
         return True
+
 
     def create_tree(self, product_name, created_products, recipes, items):
         # Check if the product has already been created.
@@ -94,6 +96,7 @@ class Recipe:
             _product.is_base = True
         return _product
 
+
     def set_base_products(self, base_products, created_products):
         for _product_name in base_products:
             _product = created_products.get(_product_name)
@@ -101,6 +104,7 @@ class Recipe:
                 _product.is_base = True
             else:
                 print("Recipe warning: Base product \"{}\" not found.".format(_product_name))
+
 
     def print(self):
         self.root.print()

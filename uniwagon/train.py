@@ -1,5 +1,14 @@
-from .constants import Const
 from .recipe import Product, Recipe
+from .station import Station
+
+# Train contants.
+INITAL_OUTPUT = 1
+
+# Wagon constants.
+STACK_CAPACITY = 40
+
+# Printout constants.
+LINE_LEN = 41
 
 class Stack:
     def __init__(self):
@@ -42,27 +51,10 @@ class Stack:
             self.name = "Empty"
             self.product = None
             self.empty = True
-            
+    
     
     def confirm(self):
         self.count_reserved = 0
-
-
-#TODO: Move to separate file
-class Station:
-    def __init__(self, asm = 2, bcn_per_asm = 8):
-        self.asm = asm
-        self.bcn_per_asm = bcn_per_asm
-        self.crafting_speed = asm * (Const.ASM_SPD * (1 + (Const.BCN_SPD * bcn_per_asm) + (Const.PRD_MOD_SPD * Const.MOD_PER_ASM)))
-        self.productivity = Const.ASM_PRD * (1 + (Const.PRD_MOD_PRD * Const.MOD_PER_ASM))
-        #TODO: Calculate efficiency
-
-
-    def print(self):
-        print("\n{0:-^{line_len}s}\n".format("Station", line_len=Const.LINE_LEN))
-        print("Station crafting speed:", self.crafting_speed)
-        print("Station productivity  :", self.productivity)
-        print("\n{0:-^{line_len}s}\n".format("", line_len=Const.LINE_LEN))
 
 
 
@@ -81,7 +73,7 @@ class Wagon:
         self.name = output.name
         self.output = output
         self.station = station
-        self.stacks = [Stack() for i in range(Const.STACK_CAPACITY)]
+        self.stacks = [Stack() for i in range(STACK_CAPACITY)]
         return True
 
 
@@ -239,7 +231,7 @@ class Train:
 
 
     def print(self):
-        print("\n{0:-^{line_len}s}\n".format(self.name + " train", line_len=Const.LINE_LEN))
+        print("\n{0:-^{line_len}s}\n".format(self.name + " train", line_len=LINE_LEN))
         if len(self.wagons) == 0:
             print("Train is empty")
             return
@@ -249,4 +241,4 @@ class Train:
             print("Wagon {} --> {}".format(_wagon_num, _wagon.name))
             _wagon.print()
             _wagon_num += 1
-        print("\n{0:-^{line_len}s}\n".format("", line_len=Const.LINE_LEN))
+        print("\n{0:-^{line_len}s}\n".format("", line_len=LINE_LEN))

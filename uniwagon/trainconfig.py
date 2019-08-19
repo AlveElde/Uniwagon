@@ -30,7 +30,7 @@ class TrainConfig:
             return False
         self.recipes_path = self.gamedata_path / _recipes_file
 
-        _output_name = self.get_value("output", "Train Config")
+        _output_name = self.get_value("output", "Train Configuration")
         if _output_name is None:
             return False
         self.output_name = _output_name.capitalize()
