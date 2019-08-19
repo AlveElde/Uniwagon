@@ -57,6 +57,10 @@ class Stack:
         self.count_reserved = 0
 
 
+    def print(self):
+        print(" - {0:<25} : {1:>10.2f}".format(self.name, self.count))
+
+
 
 class Wagon:
     def __init__(self):
@@ -143,13 +147,15 @@ class Wagon:
                 _stack.confirm()
 
 
-    def print(self):
+    def print(self, verbosity):
         _empty_stacks = 0
         for _stack in self.stacks:
             if _stack.empty:
                 _empty_stacks += 1
-            else:
-                print(" - {0:<25} : {1:>10.2f}".format(_stack.name, _stack.count))
+                continue
+            if verbosity == "High":
+                _stack.print()
+
         print(" - {0:<25} : {1:>10.2f}\n".format("Empty stacks", _empty_stacks))
 
 
@@ -229,16 +235,20 @@ class Train:
             _wagon.confirm_all()
 
 
-
     def print(self):
-        print("\n{0:-^{line_len}s}\n".format(self.name + " train", line_len=LINE_LEN))
         if len(self.wagons) == 0:
             print("Train is empty")
             return
 
+        print("\n{0:-^{line_len}s}\n".format(self.name + " train", line_len=LINE_LEN))
+        _output = 0
+        for _stack in self.wagons[0].stacks:
+            _output += _stack.count
+        print("Output: {} {}\n".format(_output, self.name))
+
         _wagon_num = 1
         for _wagon in self.wagons:
             print("Wagon {} --> {}".format(_wagon_num, _wagon.name))
-            _wagon.print()
+            _wagon.print(self.config.verbosity)
             _wagon_num += 1
         print("\n{0:-^{line_len}s}\n".format("", line_len=LINE_LEN))

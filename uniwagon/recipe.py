@@ -1,3 +1,6 @@
+# Printout constants.
+LINE_LEN = 41
+
 class Product:
     def __init__(self, name):
         self.name = name
