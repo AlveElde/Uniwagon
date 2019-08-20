@@ -4,6 +4,7 @@ from .trainconfig import TrainConfig
 from .gamedata import GameData
 from .recipe import Recipe
 from .train import Train
+from .station import Station
 
 def main():
     if len(sys.argv) <= 1:
@@ -36,6 +37,9 @@ def main():
 
     _train.find_max_output()
     _train.print()
+
+    _station = Station()
+    _station.print()
 
 if __name__ == "__main__":
     main()

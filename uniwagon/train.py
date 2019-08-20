@@ -16,6 +16,7 @@ class Stack:
         self.product = None
         self.count = 0
         self.count_reserved = 0
+        self.time = 0
         self.empty = True
 
 
@@ -55,6 +56,8 @@ class Stack:
     
     def confirm(self):
         self.count_reserved = 0
+        if self.product is not None:
+            self.time = self.product.time * self.count
 
 
     def print(self):
@@ -71,6 +74,8 @@ class Wagon:
         self.suppliers = {}
         self.next_wagon = None
         self.prev_wagon = None
+        self.time = 0
+        self.count = 0
 
 
     def create(self, output, station):
@@ -81,28 +86,6 @@ class Wagon:
         return True
 
 
-    def reserve_space(self, product, amount):
-        # Reserve any non-empty stack of the same item.
-        for _stack in self.stacks:
-            if _stack.empty:
-                continue
-            amount -= _stack.reserve(product, amount)
-            if amount == 0:
-                return True
-
-        # Reserve empty stack(s) for the remaining amount.
-        for _stack in self.stacks:
-            if not _stack.empty:
-                continue
-            amount -= _stack.reserve(product, amount)
-            if amount == 0:
-                return True
-            
-        # Not enough room in the wagon.
-        print("Warning: Not enough room: ", product.name)#TODO: Provide better feedback
-        return False
-
-    
     def reserve_output(self, amount):
         # Find smallest amount of production cycles that will produce at least amount.
         _production_cycles = amount
@@ -137,6 +120,28 @@ class Wagon:
         return True
 
 
+    def reserve_space(self, product, amount):
+        # Reserve any non-empty stack of the same item.
+        for _stack in self.stacks:
+            if _stack.empty:
+                continue
+            amount -= _stack.reserve(product, amount)
+            if amount == 0:
+                return True
+
+        # Reserve empty stack(s) for the remaining amount.
+        for _stack in self.stacks:
+            if not _stack.empty:
+                continue
+            amount -= _stack.reserve(product, amount)
+            if amount == 0:
+                return True
+            
+        # Not enough room in the wagon.
+        print("Warning: Not enough room: ", product.name)#TODO: Provide better feedback
+        return False
+
+
     def unreserve_all(self):
         for _stack in self.stacks:
                 _stack.unreserve()
@@ -147,7 +152,23 @@ class Wagon:
                 _stack.confirm()
 
 
+    def calculate_count(self):
+        self.count = 0
+        for _stack in self.stacks:
+            if _stack.name == self.name:
+                self.count += _stack.count
+
+
+    def calculate_time(self):
+        self.time = 0
+        for _stack in self.stacks:
+            if _stack.name == self.name:
+                self.time += (_stack.time / self.station.crafting_speed) / self.station.productivity
+
+
     def print(self, verbosity):
+        print("Time: {:0.1f}".format(self.time))
+
         _empty_stacks = 0
         for _stack in self.stacks:
             if _stack.empty:
@@ -155,9 +176,11 @@ class Wagon:
                 continue
             if verbosity == "High":
                 _stack.print()
+        if verbosity == "High":
+            print(" - {0:<25} : {1:>10.1f}\n".format("Empty stacks", _empty_stacks))
 
-        print(" - {0:<25} : {1:>10.2f}\n".format("Empty stacks", _empty_stacks))
-
+        if verbosity == "Low":
+            print(" - {0:<25} : {1:>10.0f}\n".format("Non-empty stacks", STACK_CAPACITY - _empty_stacks))
 
 
 class Train:
@@ -215,13 +238,14 @@ class Train:
 
     def find_max_output(self):
         # Find the max output with this train configuration.
-        _i = 0
-        while True:
-            if not self.wagon_tree.reserve_output(_i):
-                self.unreserve_all()
-                break
+        _output = 0
+        while self.wagon_tree.reserve_output(_output):
             self.confirm_all()
-            _i += 1
+            _output += 1
+
+        self.unreserve_all()
+        self.calculate_count()
+        self.calculate_time()
         return True
 
 
@@ -235,16 +259,23 @@ class Train:
             _wagon.confirm_all()
 
 
+    def calculate_count(self):
+        for _wagon in self.wagons:
+            _wagon.calculate_count()
+
+
+    def calculate_time(self):
+        for _wagon in self.wagons:
+            _wagon.calculate_time()
+
+
     def print(self):
         if len(self.wagons) == 0:
             print("Train is empty")
             return
 
         print("\n{0:-^{line_len}s}\n".format(self.name + " train", line_len=LINE_LEN))
-        _output = 0
-        for _stack in self.wagons[0].stacks:
-            _output += _stack.count
-        print("Output: {} {}\n".format(_output, self.name))
+        print("Output: {:0.1f} {}\n".format(self.wagons[0].count, self.name))
 
         _wagon_num = 1
         for _wagon in self.wagons:
